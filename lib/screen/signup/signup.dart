@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:driving_license_exam/services/auth_service.dart';
 
 import '../../component/api_error_handler.dart';
+import '../../services/api_service.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -84,10 +85,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
       );
 
       if (response.success && response.data != null) {
-        // Show success message
+        await StorageService.saveUser(response.data!);
+
         ApiErrorHandler.showSuccess(context, 'Account created successfully!');
 
-        // Navigate to login screen
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -95,7 +96,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
           ),
         );
       } else {
-        // Show error message
         ApiErrorHandler.showError(
             context,
             response.message.isNotEmpty
@@ -103,7 +103,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 : 'Failed to create account');
       }
     } catch (e) {
-      // Handle network or other errors
       ApiErrorHandler.showError(context, ApiErrorHandler.getErrorMessage(e));
     } finally {
       setState(() {
