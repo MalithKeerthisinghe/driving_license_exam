@@ -85,6 +85,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       );
 
       if (response.success && response.data != null) {
+        print('response ${response.data}');
         await StorageService.saveUser(response.data!);
 
         ApiErrorHandler.showSuccess(context, 'Account created successfully!');
