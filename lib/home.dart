@@ -7,6 +7,8 @@ import 'package:driving_license_exam/studymaterial.dart';
 import 'package:flutter/material.dart';
 
 import 'services/api_service.dart';
+import 'services/subscription_service.dart';
+import 'models/subscription_models.dart';
 
 // Create placeholder screens for each tab (you should replace these with your actual screens)
 
@@ -108,15 +110,24 @@ class HomeContent extends StatefulWidget {
 
 class _HomeContentState extends State<HomeContent> {
   String? username;
+  UserSubscription? currentActivePlan;
+  bool isSubscriptionLoading = true;
+  bool hasSubscriptionError = false;
 
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
-    getUserData();
+    _initializeData();
   }
 
-  void getUserData() async {
+  Future<void> _initializeData() async {
+    await Future.wait([
+      getUserData(),
+      _fetchUserSubscription(),
+    ]);
+  }
+
+  Future<void> getUserData() async {
     try {
       print('=== Getting User Data ===');
 
@@ -148,6 +159,72 @@ class _HomeContentState extends State<HomeContent> {
     } catch (e) {
       print('Error getting user data: $e');
     }
+  }
+
+  Future<void> _fetchUserSubscription() async {
+    try {
+      setState(() {
+        isSubscriptionLoading = true;
+        hasSubscriptionError = false;
+      });
+
+      final userId = await StorageService.getID();
+      print("Fetching user subscription for userId: $userId");
+
+      if (userId == null) {
+        print("User ID is null, cannot fetch subscription");
+        setState(() {
+          isSubscriptionLoading = false;
+          hasSubscriptionError = true;
+        });
+        return;
+      }
+
+      final response = await SubscriptionService.getUserSubscriptions(
+        userId: userId,
+        status: 'active',
+      );
+
+      print("User subscription response: ${response.data}");
+
+      if (response.success && response.data != null) {
+        setState(() {
+          currentActivePlan = _getCurrentActivePlan(response.data!);
+          isSubscriptionLoading = false;
+        });
+
+        print("Current active plan for home: ${currentActivePlan?.plan.name}");
+      } else {
+        print("Failed to fetch user subscription: ${response.message}");
+        setState(() {
+          isSubscriptionLoading = false;
+          hasSubscriptionError = true;
+        });
+      }
+    } catch (e) {
+      print("Error fetching user subscription: $e");
+      setState(() {
+        isSubscriptionLoading = false;
+        hasSubscriptionError = true;
+      });
+    }
+  }
+
+  // Helper method to determine the current active plan
+  UserSubscription? _getCurrentActivePlan(
+      List<UserSubscription> subscriptions) {
+    if (subscriptions.isEmpty) return null;
+
+    // Filter only active and non-expired subscriptions
+    final activeSubscriptions = subscriptions
+        .where((sub) => sub.status.toLowerCase() == 'active' && !sub.isExpired)
+        .toList();
+
+    if (activeSubscriptions.isEmpty) return null;
+
+    // If multiple active subscriptions, return the one with the latest end date
+    activeSubscriptions.sort((a, b) => b.endDate.compareTo(a.endDate));
+    return activeSubscriptions.first;
   }
 
   @override
@@ -183,78 +260,8 @@ class _HomeContentState extends State<HomeContent> {
               ),
             ),
             SizedBox(height: size.height * 0.016),
-            // Subscription card
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
-                  BoxShadow(
-                    blurRadius: 10,
-                    color: Colors.black12,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.circle, color: Colors.green, size: 10),
-                      SizedBox(width: 6),
-                      Text("Active Subscription"),
-                      Spacer(),
-                      Text("Premium Plan",
-                          style: TextStyle(color: Colors.grey)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    height: 60, // Set width to 60
-                    decoration: const BoxDecoration(
-                      borderRadius: BorderRadius.all(Radius.circular(15)),
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.white,
-                          Color(0xFFBDE0FE), // BDE0FE
-                          // FFFFFF
-                        ],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                      ),
-                    ),
-                    // color: Colors.grey.shade200,
-                    child: const Row(
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Text("Subscription expires in",
-                                  style: TextStyle(color: Colors.grey)),
-                            ),
-                            SizedBox(height: 0.4),
-                            Text(
-                              "25 days",
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Color(0xFF219EBC),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Spacer(),
-                        Icon(Icons.alarm_on_rounded, color: Colors.blue),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            // Dynamic Subscription card
+            _buildSubscriptionCard(),
             const SizedBox(height: 20),
             const Text(
               "Your Progress",
@@ -331,9 +338,8 @@ class _HomeContentState extends State<HomeContent> {
               Icons.menu_book,
               onTap: () {
                 final homeState = context.findAncestorStateOfType<_HomeState>();
-                // ignore: invalid_use_of_protected_member
                 homeState?.setState(() {
-                  homeState._currentIndex = 1; // Assuming Study is at index 1
+                  homeState._currentIndex = 1;
                 });
               },
             ),
@@ -344,9 +350,8 @@ class _HomeContentState extends State<HomeContent> {
               Icons.assignment_turned_in,
               onTap: () {
                 final homeState = context.findAncestorStateOfType<_HomeState>();
-                // ignore: invalid_use_of_protected_member
                 homeState?.setState(() {
-                  homeState._currentIndex = 2; // Assuming Study is at index 1
+                  homeState._currentIndex = 2;
                 });
               },
             ),
@@ -354,6 +359,266 @@ class _HomeContentState extends State<HomeContent> {
         ),
       ),
     );
+  }
+
+  // New method to build dynamic subscription card
+  Widget _buildSubscriptionCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            blurRadius: 10,
+            color: Colors.black12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSubscriptionHeader(),
+          const SizedBox(height: 12),
+          _buildSubscriptionContent(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubscriptionHeader() {
+    if (isSubscriptionLoading) {
+      return Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: const BoxDecoration(
+              color: Colors.grey,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Text("Loading Subscription..."),
+          const Spacer(),
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ],
+      );
+    }
+
+    if (hasSubscriptionError || currentActivePlan == null) {
+      return Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: const BoxDecoration(
+              color: Colors.red,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Text("No Active Subscription"),
+          const Spacer(),
+          GestureDetector(
+            onTap: () {
+              final homeState = context.findAncestorStateOfType<_HomeState>();
+              homeState?.setState(() {
+                homeState._currentIndex = 3; // Go to subscription tab
+              });
+            },
+            child: const Text("Get Premium",
+                style: TextStyle(
+                    color: Color(0xFF219EBC), fontWeight: FontWeight.w600)),
+          ),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: _getSubscriptionStatusColor(),
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 6),
+        const Text("Active Subscription"),
+        const Spacer(),
+        Text(currentActivePlan!.plan.name,
+            style: const TextStyle(color: Colors.grey)),
+      ],
+    );
+  }
+
+  Widget _buildSubscriptionContent() {
+    if (isSubscriptionLoading) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        height: 60,
+        decoration: const BoxDecoration(
+          borderRadius: BorderRadius.all(Radius.circular(15)),
+          color: Colors.grey,
+        ),
+        child: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (hasSubscriptionError || currentActivePlan == null) {
+      return GestureDetector(
+        onTap: () {
+          final homeState = context.findAncestorStateOfType<_HomeState>();
+          homeState?.setState(() {
+            homeState._currentIndex = 3; // Go to subscription tab
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          height: 60,
+          decoration: const BoxDecoration(
+            borderRadius: BorderRadius.all(Radius.circular(15)),
+            gradient: LinearGradient(
+              colors: [
+                Colors.white,
+                Color(0xFFFFE4E1), // Light red gradient
+              ],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+          ),
+          child: const Row(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text("Get premium access to unlock",
+                        style: TextStyle(color: Colors.grey)),
+                  ),
+                  SizedBox(height: 0.4),
+                  Text(
+                    "all features",
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: Color(0xFF219EBC),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              Spacer(),
+              Icon(Icons.star, color: Colors.orange),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      height: 60,
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.all(Radius.circular(15)),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white,
+            _getSubscriptionGradientColor(),
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+      ),
+      child: Row(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Expanded(
+                child: Text("Subscription expires in",
+                    style: TextStyle(color: Colors.grey)),
+              ),
+              const SizedBox(height: 0.4),
+              Text(
+                currentActivePlan!.formattedTimeRemaining,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: _getTimeRemainingColor(),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Icon(_getSubscriptionIcon(), color: _getTimeRemainingColor()),
+        ],
+      ),
+    );
+  }
+
+  Color _getSubscriptionStatusColor() {
+    if (currentActivePlan == null) return Colors.red;
+
+    final daysRemaining = currentActivePlan!.daysRemaining;
+
+    if (daysRemaining <= 0) {
+      return Colors.red; // Expired
+    } else if (daysRemaining <= 7) {
+      return Colors.orange; // Expiring soon
+    } else {
+      return Colors.green; // Active
+    }
+  }
+
+  Color _getSubscriptionGradientColor() {
+    if (currentActivePlan == null) return const Color(0xFFFFE4E1);
+
+    final daysRemaining = currentActivePlan!.daysRemaining;
+
+    if (daysRemaining <= 0) {
+      return const Color(0xFFFFE4E1); // Light red
+    } else if (daysRemaining <= 7) {
+      return const Color(0xFFFFF0E6); // Light orange
+    } else {
+      return const Color(0xFFBDE0FE); // Light blue (original)
+    }
+  }
+
+  Color _getTimeRemainingColor() {
+    if (currentActivePlan == null) return const Color(0xFF219EBC);
+
+    final daysRemaining = currentActivePlan!.daysRemaining;
+
+    if (daysRemaining <= 0) {
+      return Colors.red; // Expired
+    } else if (daysRemaining <= 7) {
+      return Colors.orange; // Expiring soon
+    } else {
+      return const Color(0xFF219EBC); // Healthy
+    }
+  }
+
+  IconData _getSubscriptionIcon() {
+    if (currentActivePlan == null) return Icons.star;
+
+    final daysRemaining = currentActivePlan!.daysRemaining;
+
+    if (daysRemaining <= 0) {
+      return Icons.error; // Expired
+    } else if (daysRemaining <= 7) {
+      return Icons.warning; // Expiring soon
+    } else {
+      return Icons.alarm_on_rounded; // Healthy
+    }
   }
 
   Widget _progressCard(

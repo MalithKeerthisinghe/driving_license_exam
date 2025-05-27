@@ -181,10 +181,40 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   double _calculateProgress() {
     if (currentActivePlan == null) return 0.0;
 
-    final totalDays =
-        currentActivePlan!.plan.durationMonths * 30; // Approximate days
-    final daysUsed = totalDays - currentActivePlan!.daysRemaining;
-    return daysUsed / totalDays;
+    // Calculate total days from start date to end date for accuracy
+    final totalDays = currentActivePlan!.endDate
+        .difference(currentActivePlan!.startDate)
+        .inDays;
+    final daysRemaining = currentActivePlan!.daysRemaining;
+
+    // Ensure we have valid data
+    if (totalDays <= 0) return 0.0;
+
+    // Calculate days used (elapsed)
+    final daysUsed = totalDays - daysRemaining;
+
+    // Calculate progress (0.0 to 1.0)
+    final progress = daysUsed / totalDays;
+
+    // Clamp between 0 and 1 to avoid invalid values
+    return progress.clamp(0.0, 1.0);
+  }
+
+  // Helper method to get progress color based on remaining time
+  Color _getProgressColor() {
+    if (currentActivePlan == null) return Colors.grey;
+
+    final daysRemaining = currentActivePlan!.daysRemaining;
+
+    if (daysRemaining <= 0) {
+      return Colors.red; // Expired
+    } else if (daysRemaining <= 7) {
+      return Colors.orange; // Expiring soon (7 days or less)
+    } else if (daysRemaining <= 14) {
+      return Colors.yellow.shade700; // Warning (14 days or less)
+    } else {
+      return Colors.cyan; // Healthy
+    }
   }
 
   @override
@@ -338,17 +368,26 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       );
     }
 
+    final daysRemaining = currentActivePlan!.daysRemaining;
+    Color chipTextColor;
+
+    if (daysRemaining <= 0) {
+      chipTextColor = Colors.red;
+    } else if (daysRemaining <= 7) {
+      chipTextColor = Colors.orange;
+    } else if (daysRemaining <= 14) {
+      chipTextColor = Colors.yellow.shade700;
+    } else {
+      chipTextColor = const Color(0xff219EBC);
+    }
+
     return Chip(
       label: Text(currentActivePlan!.formattedTimeRemaining,
-          style: TextStyle(
-              color: currentActivePlan!.daysRemaining <= 7
-                  ? Colors.red
-                  : const Color(0xff219EBC))),
+          style: TextStyle(color: chipTextColor, fontWeight: FontWeight.w600)),
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: const BorderSide(
-            color: Color.fromARGB(255, 255, 255, 255), width: 1),
+        side: BorderSide(color: chipTextColor.withOpacity(0.3), width: 1),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
     );
@@ -400,13 +439,40 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       );
     }
 
-    return LinearProgressIndicator(
-      value: _calculateProgress(),
-      minHeight: 6,
-      backgroundColor: Colors.grey.shade300,
-      color: currentActivePlan!.daysRemaining <= 7 ? Colors.red : Colors.cyan,
-      borderRadius: BorderRadius.circular(12),
+    final progress = _calculateProgress();
+    final progressColor = _getProgressColor();
+
+    return Column(
+      children: [
+        LinearProgressIndicator(
+          value: progress,
+          minHeight: 6,
+          backgroundColor: Colors.grey.shade300,
+          color: progressColor,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        const SizedBox(height: 4),
+        // Add progress text for clarity
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Started: ${_formatDate(currentActivePlan!.startDate)}',
+              style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+            ),
+            Text(
+              'Expires: ${_formatDate(currentActivePlan!.endDate)}',
+              style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      ],
     );
+  }
+
+  // Helper method to format dates
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
   }
 
   Widget _buildPlansSection(Size size) {
