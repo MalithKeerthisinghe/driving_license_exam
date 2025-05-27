@@ -26,6 +26,17 @@ class StudyService {
     );
   }
 
+  static Future<ApiResponse<List<Category>>> getAllCategories() async {
+    final response =
+        await HttpService.get('${ApiConfig.studyBaseUrl}/admin/categories');
+    return ApiResponse.fromJson(
+      response,
+      (data) => (data as List)
+          .map((category) => Category.fromJson(category))
+          .toList(),
+    );
+  }
+
   static Future<ApiResponse<List<Lesson>>> getLessons({
     required int vehicleTypeId,
     required int categoryId,

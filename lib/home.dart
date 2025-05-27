@@ -49,39 +49,6 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
       });
     // Start the animation
     _animationController.forward();
-
-    getUserData();
-  }
-
-  void getUserData() async {
-    try {
-      print('=== Getting User Data ===');
-
-      // Get user ID
-      final userId = await StorageService.getID();
-      print('User ID: ${userId ?? 'No ID found'}');
-
-      // Get user object
-      final user = await StorageService.getUser();
-      if (user != null) {
-        print('User Name: ${user.name}');
-        print('User Email: ${user.email}');
-        print('User DOB: ${user.dateOfBirth}');
-        print('Full User Object: $user');
-      } else {
-        print('No user data found in storage');
-      }
-
-      // Check authentication status
-      final token = await StorageService.getToken();
-      final isLoggedIn = await StorageService.isLoggedIn();
-      print('Has Token: ${token != null}');
-      print('Is Logged In: $isLoggedIn');
-
-      print('========================');
-    } catch (e) {
-      print('Error getting user data: $e');
-    }
   }
 
   @override
@@ -132,8 +99,56 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
 }
 
 // Extract your original home content into a separate widget
-class HomeContent extends StatelessWidget {
+class HomeContent extends StatefulWidget {
   const HomeContent({super.key});
+
+  @override
+  State<HomeContent> createState() => _HomeContentState();
+}
+
+class _HomeContentState extends State<HomeContent> {
+  String? username;
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    getUserData();
+  }
+
+  void getUserData() async {
+    try {
+      print('=== Getting User Data ===');
+
+      // Get user ID
+      final userId = await StorageService.getID();
+      print('User ID: ${userId ?? 'No ID found'}');
+
+      // Get user object
+      final user = await StorageService.getUser();
+      if (user != null) {
+        print('User Name: ${user.name}');
+        print('User Email: ${user.email}');
+        print('User DOB: ${user.dateOfBirth}');
+        print('Full User Object: $user');
+        setState(() {
+          username = user.name;
+        });
+      } else {
+        print('No user data found in storage');
+      }
+
+      // Check authentication status
+      final token = await StorageService.getToken();
+      final isLoggedIn = await StorageService.isLoggedIn();
+      print('Has Token: ${token != null}');
+      print('Is Logged In: $isLoggedIn');
+
+      print('========================');
+    } catch (e) {
+      print('Error getting user data: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -149,9 +164,9 @@ class HomeContent extends StatelessWidget {
               "Welcome Back,",
               style: TextStyle(fontSize: 16, color: Colors.black54),
             ),
-            const Text(
-              "Malithi Imasha",
-              style: TextStyle(
+            Text(
+              username ?? 'User',
+              style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),

@@ -1,9 +1,11 @@
 import 'package:driving_license_exam/component/appbar.dart';
 import 'package:driving_license_exam/component/backbutton.dart';
+import 'package:driving_license_exam/models/subscription_models.dart';
 import 'package:flutter/material.dart';
 
 class PaymentScreen extends StatefulWidget {
-  const PaymentScreen({super.key});
+  SubscriptionPlan selectedPlan;
+  PaymentScreen({super.key, required this.selectedPlan});
 
   @override
   _PaymentScreenState createState() => _PaymentScreenState();

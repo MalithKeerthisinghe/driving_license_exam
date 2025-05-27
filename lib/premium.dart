@@ -1,7 +1,13 @@
 import 'package:driving_license_exam/component/appbar.dart';
 import 'package:driving_license_exam/component/custompageroute.dart';
 import 'package:driving_license_exam/payment.dart';
+import 'package:driving_license_exam/services/api_service.dart';
+import 'package:driving_license_exam/services/http_service.dart';
 import 'package:flutter/material.dart';
+
+import 'models/subscription_models.dart';
+import 'services/subscription_service.dart';
+import 'component/api_error_handler.dart';
 
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
@@ -13,62 +19,181 @@ class SubscriptionScreen extends StatefulWidget {
 class _SubscriptionScreenState extends State<SubscriptionScreen> {
   int selectedVehicleIndex = 0;
   int selectedPlanIndex = -1;
+  bool isLoading = true;
+  bool isVehicleLoading = false;
+  bool isUserPlanLoading = true; // Loading state for user subscription
+  String? errorMessage;
+
+  List<UserSubscription>? userSubscriptions;
+  UserSubscription? currentActivePlan; // The current active subscription
+  List<SubscriptionPlan> currentPlans = [];
 
   final List<Map<String, dynamic>> vehicleTypes = [
-    {"name": "Car", "icon": Icons.directions_car},
-    {"name": "Bike", "icon": Icons.motorcycle},
-    {"name": "Light", "icon": Icons.local_shipping},
-    {"name": "Heavy", "icon": Icons.fire_truck},
-    {"name": "Special", "icon": Icons.miscellaneous_services},
-  ];
-
-  final List<Map<String, dynamic>> plans = [
+    {"name": "Car", "icon": Icons.directions_car, "api_name": "car"},
+    {"name": "Bike", "icon": Icons.motorcycle, "api_name": "bike"},
     {
-      "duration": "3 Month Plan",
-      "price": "Rs. 1500",
-      "features": [
-        "Full access to practice tests",
-        "Road rules and signs handbook",
-        "Progress tracking"
-      ],
-      "button": "Select Plan"
+      "name": "Light",
+      "icon": Icons.local_shipping,
+      "api_name": "light_vehicle"
     },
+    {"name": "Heavy", "icon": Icons.fire_truck, "api_name": "heavy_vehicle"},
     {
-      "duration": "6 Month Plan",
-      "price": "Rs. 2700",
-      "features": [
-        "Full access to practice tests",
-        "Road rules and signs handbook",
-        "Progress tracking",
-        "Renewal alerts"
-      ],
-      "button": "Select Plan"
+      "name": "Special",
+      "icon": Icons.miscellaneous_services,
+      "api_name": "special"
     },
-    {
-      "duration": "1 Year Plan",
-      "price": "Rs. 4800",
-      "features": [
-        "Full access to premium tests",
-        "Road rules and signs handbook",
-        "Personalized analytics",
-        "Progress tracker"
-      ],
-      "button": "Select Plan"
-    }
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _initializeData();
+  }
+
+  // Initialize both user subscriptions and subscription plans
+  Future<void> _initializeData() async {
+    await Future.wait([
+      _fetchUserSubscriptions(),
+      _fetchSubscriptionPlans(),
+    ]);
+  }
+
+  Future<void> _fetchUserSubscriptions() async {
+    try {
+      setState(() {
+        isUserPlanLoading = true;
+      });
+
+      final userId = await StorageService.getID();
+      print("Fetching user subscriptions for userId: $userId");
+
+      if (userId == null) {
+        print("User ID is null, cannot fetch subscriptions");
+        setState(() {
+          isUserPlanLoading = false;
+        });
+        return;
+      }
+
+      final response = await SubscriptionService.getUserSubscriptions(
+        userId: userId,
+        status: 'active', // Only get active subscriptions
+      );
+
+      print("User subscriptions response: ${response.data}");
+
+      if (response.success && response.data != null) {
+        setState(() {
+          userSubscriptions = response.data;
+          // Get the most recent active subscription or the one with the latest end date
+          currentActivePlan = _getCurrentActivePlan(response.data!);
+          isUserPlanLoading = false;
+        });
+
+        print("Current active plan: ${currentActivePlan?.plan.name}");
+      } else {
+        print("Failed to fetch user subscriptions: ${response.message}");
+        setState(() {
+          isUserPlanLoading = false;
+        });
+      }
+    } catch (e) {
+      print("Error fetching user subscriptions: $e");
+      setState(() {
+        isUserPlanLoading = false;
+      });
+    }
+  }
+
+  // Helper method to determine the current active plan
+  UserSubscription? _getCurrentActivePlan(
+      List<UserSubscription> subscriptions) {
+    if (subscriptions.isEmpty) return null;
+
+    // Filter only active and non-expired subscriptions
+    final activeSubscriptions = subscriptions
+        .where((sub) => sub.status.toLowerCase() == 'active' && !sub.isExpired)
+        .toList();
+
+    if (activeSubscriptions.isEmpty) return null;
+
+    // If multiple active subscriptions, return the one with the latest end date
+    activeSubscriptions.sort((a, b) => b.endDate.compareTo(a.endDate));
+    return activeSubscriptions.first;
+  }
+
+  Future<void> _fetchSubscriptionPlans() async {
+    try {
+      setState(() {
+        isLoading = true;
+        errorMessage = null;
+      });
+
+      final selectedVehicleApiName =
+          vehicleTypes[selectedVehicleIndex]["api_name"];
+
+      print("Fetching plans for vehicle type: $selectedVehicleApiName");
+
+      final response = await SubscriptionService.getSubscriptionPlans(
+          vehicleType: selectedVehicleApiName);
+
+      print("Subscription Plans Response: ${response.data}");
+
+      if (response.success && response.data != null) {
+        setState(() {
+          currentPlans = response.data!;
+          selectedPlanIndex = -1;
+          isLoading = false;
+          isVehicleLoading = false;
+        });
+      } else {
+        setState(() {
+          errorMessage = response.message.isNotEmpty
+              ? response.message
+              : 'Failed to load subscription plans';
+          isLoading = false;
+          isVehicleLoading = false;
+        });
+      }
+    } catch (e) {
+      print("Error fetching subscription plans: $e");
+      setState(() {
+        errorMessage = 'Error loading plans: ${e.toString()}';
+        isLoading = false;
+        isVehicleLoading = false;
+      });
+    }
+  }
+
+  Future<void> _onVehicleTypeChanged(int newIndex) async {
+    if (newIndex == selectedVehicleIndex) return;
+
+    setState(() {
+      selectedVehicleIndex = newIndex;
+      isVehicleLoading = true;
+      selectedPlanIndex = -1;
+    });
+
+    await _fetchSubscriptionPlans();
+  }
+
+  // Helper method to calculate progress for current plan
+  double _calculateProgress() {
+    if (currentActivePlan == null) return 0.0;
+
+    final totalDays =
+        currentActivePlan!.plan.durationMonths * 30; // Approximate days
+    final daysUsed = totalDays - currentActivePlan!.daysRemaining;
+    return daysUsed / totalDays;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final selectedVehicle = vehicleTypes[selectedVehicleIndex]["name"];
-    const int totalDays = 180; // For 6-month plan
-    const int remainingDays = 25;
-    const double progress = (totalDays - remainingDays) / totalDays;
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
       body: SingleChildScrollView(
-        // padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -77,61 +202,27 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 bgcolor: const Color(0xffD7ECFE),
                 textColor: Colors.black,
                 heading: "SUBSCRIPTION"),
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.symmetric(horizontal: 17),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.lightBlue.shade50,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("Current Plan",
-                          style:
-                              TextStyle(fontSize: 14, color: Colors.black87)),
-                      Chip(
-                        label: const Text("25 days left",
-                            style: TextStyle(color: Color(0xff219EBC))),
-                        backgroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          side: const BorderSide(
-                              color: Color.fromARGB(255, 255, 255, 255),
-                              width: 1),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 0),
-                      )
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    "6 Months - Light Vehicle",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  LinearProgressIndicator(
-                    value: progress,
-                    minHeight: 6,
-                    backgroundColor: Colors.grey.shade300,
-                    color: Colors.cyan,
-                    borderRadius: BorderRadius.circular(12),
-                  )
-                ],
-              ),
-            ),
+
+            // Current Plan Section - Now Dynamic
+            _buildCurrentPlanSection(),
             const SizedBox(height: 20),
 
             // Vehicle Type Selector
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 17),
-              child: Text("Select Vehicle Type",
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 17),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Select Vehicle Type",
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  if (isVehicleLoading)
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ],
+              ),
             ),
             const SizedBox(height: 8),
             Padding(
@@ -142,11 +233,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   children: List.generate(vehicleTypes.length, (index) {
                     final isSelected = selectedVehicleIndex == index;
                     return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          selectedVehicleIndex = index;
-                        });
-                      },
+                      onTap: isVehicleLoading
+                          ? null
+                          : () => _onVehicleTypeChanged(index),
                       child: Container(
                         margin: const EdgeInsets.symmetric(horizontal: 8),
                         padding: const EdgeInsets.symmetric(
@@ -191,98 +280,358 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             const SizedBox(height: 20),
 
             // Subscription Plans
-            ...List.generate(plans.length, (index) {
-              final plan = plans[index];
-              final isSelected = selectedPlanIndex == index;
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 17),
-                child: Card(
-                  color: isSelected
-                      ? const Color.fromARGB(255, 247, 251, 253)
-                      : Colors.grey.shade50,
-                  shape: RoundedRectangleBorder(
-                    side: BorderSide(
-                      color: isSelected ? Colors.blue : Colors.transparent,
-                      width: 2,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 4,
-                  margin: const EdgeInsets.symmetric(vertical: 10),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.calendar_month,
-                              color: Color(0xff219EBC),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(plan["duration"],
-                                style: const TextStyle(
-                                    fontSize: 18, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(plan["price"],
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 20,
-                                color: Color.fromARGB(255, 0, 0, 0))),
-                        const SizedBox(height: 10),
-                        ...plan["features"].map<Widget>((feature) => Row(
-                              children: [
-                                const Icon(Icons.check_circle,
-                                    size: 16, color: Colors.green),
-                                const SizedBox(width: 8),
-                                Expanded(child: Text(feature)),
-                              ],
-                            )),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                            height: size.height * 0.05,
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                backgroundColor: isSelected
-                                    ? const Color(0xff219EBC)
-                                    : const Color(0xffD7ECFE),
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  selectedPlanIndex = index;
-                                });
-                                isSelected
-                                    ? Navigator.push(
-                                        context,
-                                        createFadeRoute(const PaymentScreen()),
-                                      )
-                                    : null;
-                              },
-                              child: Text(
-                                  isSelected ? "Renew Plan" : plan["button"],
-                                  style: TextStyle(
-                                    color: isSelected
-                                        ? Colors.white
-                                        : const Color(0xff219EBC),
-                                  )),
-                            ))
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
+            _buildPlansSection(size),
           ],
         ),
       ),
+    );
+  }
+
+  // New method to build current plan section dynamically
+  Widget _buildCurrentPlanSection() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 17),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.lightBlue.shade50,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("Current Plan",
+                  style: TextStyle(fontSize: 14, color: Colors.black87)),
+              _buildCurrentPlanChip(),
+            ],
+          ),
+          const SizedBox(height: 4),
+          _buildCurrentPlanTitle(),
+          const SizedBox(height: 12),
+          _buildCurrentPlanProgress(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentPlanChip() {
+    if (isUserPlanLoading) {
+      return const SizedBox(
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+
+    if (currentActivePlan == null) {
+      return Chip(
+        label:
+            const Text("No active plan", style: TextStyle(color: Colors.grey)),
+        backgroundColor: Colors.grey.shade200,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+      );
+    }
+
+    return Chip(
+      label: Text(currentActivePlan!.formattedTimeRemaining,
+          style: TextStyle(
+              color: currentActivePlan!.daysRemaining <= 7
+                  ? Colors.red
+                  : const Color(0xff219EBC))),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: const BorderSide(
+            color: Color.fromARGB(255, 255, 255, 255), width: 1),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+    );
+  }
+
+  Widget _buildCurrentPlanTitle() {
+    if (isUserPlanLoading) {
+      return Container(
+        height: 20,
+        width: 200,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade300,
+          borderRadius: BorderRadius.circular(4),
+        ),
+      );
+    }
+
+    if (currentActivePlan == null) {
+      return const Text(
+        "No Active Subscription",
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      );
+    }
+
+    return Text(
+      "${currentActivePlan!.plan.name} - ${currentActivePlan!.plan.formattedPrice}",
+      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+    );
+  }
+
+  Widget _buildCurrentPlanProgress() {
+    if (isUserPlanLoading) {
+      return Container(
+        height: 6,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade300,
+          borderRadius: BorderRadius.circular(12),
+        ),
+      );
+    }
+
+    if (currentActivePlan == null) {
+      return LinearProgressIndicator(
+        value: 0.0,
+        minHeight: 6,
+        backgroundColor: Colors.grey.shade300,
+        color: Colors.grey,
+        borderRadius: BorderRadius.circular(12),
+      );
+    }
+
+    return LinearProgressIndicator(
+      value: _calculateProgress(),
+      minHeight: 6,
+      backgroundColor: Colors.grey.shade300,
+      color: currentActivePlan!.daysRemaining <= 7 ? Colors.red : Colors.cyan,
+      borderRadius: BorderRadius.circular(12),
+    );
+  }
+
+  Widget _buildPlansSection(Size size) {
+    if (isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            children: [
+              Icon(Icons.error_outline, size: 64, color: Colors.grey[600]),
+              const SizedBox(height: 16),
+              Text(
+                errorMessage!,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _fetchSubscriptionPlans,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (currentPlans.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            children: [
+              Icon(Icons.info_outline, size: 64, color: Colors.grey[600]),
+              const SizedBox(height: 16),
+              Text(
+                'No subscription plans available for ${vehicleTypes[selectedVehicleIndex]["name"]}',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: List.generate(currentPlans.length, (index) {
+        final plan = currentPlans[index];
+        final isSelected = selectedPlanIndex == index;
+
+        // Check if user already has this plan
+        final hasCurrentPlan =
+            currentActivePlan != null && currentActivePlan!.plan.id == plan.id;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 17),
+          child: Card(
+            color: isSelected
+                ? const Color.fromARGB(255, 247, 251, 253)
+                : Colors.grey.shade50,
+            shape: RoundedRectangleBorder(
+              side: BorderSide(
+                color: isSelected ? Colors.blue : Colors.transparent,
+                width: 2,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 4,
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.calendar_month,
+                        color: Color(0xff219EBC),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(plan.name,
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
+                      ),
+                      if (plan.isPopular)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.orange,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Popular',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      if (hasCurrentPlan)
+                        Container(
+                          margin: const EdgeInsets.only(left: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Current',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(plan.formattedPrice,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                          color: Color.fromARGB(255, 0, 0, 0))),
+                  if (plan.description != null && plan.description!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        plan.description!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  if (plan.displayFeatures.isNotEmpty)
+                    ...plan.displayFeatures.map<Widget>((feature) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle,
+                                  size: 16, color: Colors.green),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(feature)),
+                            ],
+                          ),
+                        ))
+                  else
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle,
+                              size: 16, color: Colors.green),
+                          SizedBox(width: 8),
+                          Expanded(child: Text('Access to all features')),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                      height: size.height * 0.05,
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          backgroundColor: hasCurrentPlan
+                              ? Colors.grey.shade400
+                              : isSelected
+                                  ? const Color(0xff219EBC)
+                                  : const Color(0xffD7ECFE),
+                        ),
+                        onPressed: hasCurrentPlan
+                            ? null
+                            : () {
+                                setState(() {
+                                  selectedPlanIndex = index;
+                                });
+                                if (isSelected) {
+                                  Navigator.push(
+                                    context,
+                                    createFadeRoute(PaymentScreen(
+                                      selectedPlan: plan,
+                                    )),
+                                  );
+                                }
+                              },
+                        child: Text(
+                            hasCurrentPlan
+                                ? "Current Plan"
+                                : isSelected
+                                    ? "Continue to Payment"
+                                    : "Select Plan",
+                            style: TextStyle(
+                              color: hasCurrentPlan
+                                  ? Colors.white
+                                  : isSelected
+                                      ? Colors.white
+                                      : const Color(0xff219EBC),
+                            )),
+                      ))
+                ],
+              ),
+            ),
+          ),
+        );
+      }),
     );
   }
 }

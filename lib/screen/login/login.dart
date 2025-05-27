@@ -40,6 +40,8 @@ class _LoginScreenState extends State<LoginScreen> {
         // If successful, navigate to the home screen
         if (response.success && response.data != null) {
           await StorageService.saveID(response.data!.user.id);
+          final user = response.data!.user;
+          await StorageService.saveUser(user);
 
           ApiErrorHandler.showSuccess(context, 'Account created successfully!');
 

@@ -36,6 +36,8 @@ class User {
       'name': name,
       'date_of_birth': dateOfBirth,
       'profile_photo_url': profilePhotoUrl,
+      'created_at': createdAt.toIso8601String(), // ✅ Add this
+      'updated_at': updatedAt.toIso8601String(), // ✅ Add this
     };
   }
 }

@@ -2,11 +2,13 @@ import 'package:driving_license_exam/component/appbar.dart';
 import 'package:driving_license_exam/component/backbutton.dart';
 import 'package:driving_license_exam/component/custompageroute.dart';
 import 'package:driving_license_exam/languageselction.dart';
+import 'package:driving_license_exam/models/study_models.dart';
 import 'package:flutter/material.dart';
 
 class StudyCourseScreen extends StatelessWidget {
   final Size size;
   final String categoryTitle; // Add this parameter
+  final int categoryId;
   final List<Map<String, String>> lessons = [
     {
       "image": "assets/images/dead_end.png",
@@ -41,11 +43,11 @@ class StudyCourseScreen extends StatelessWidget {
   ];
 
   // Update constructor to include categoryTitle
-  StudyCourseScreen({
-    super.key,
-    required this.size,
-    required this.categoryTitle,
-  });
+  StudyCourseScreen(
+      {super.key,
+      required this.size,
+      required this.categoryTitle,
+      required this.categoryId});
 
   @override
   Widget build(BuildContext context) {
