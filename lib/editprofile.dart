@@ -3,24 +3,39 @@ import 'package:driving_license_exam/component/backbutton.dart';
 import 'package:flutter/material.dart';
 
 class Editprofile extends StatefulWidget {
-  const Editprofile({super.key});
+  final String? name;
+  final String? email;
+  final String? dateOfBirth;
+
+  const Editprofile({
+    super.key,
+    this.name,
+    this.email,
+    this.dateOfBirth,
+  });
 
   @override
   State<Editprofile> createState() => _EditprofileState();
 }
 
 class _EditprofileState extends State<Editprofile> {
-  final TextEditingController _nameController =
-      TextEditingController(text: 'Malithi Imasha');
-  final TextEditingController _emailController =
-      TextEditingController(text: 'malithiimasha@gmail.com');
-  final TextEditingController _dobController =
-      TextEditingController(text: 'May 10, 2000');
+  late final TextEditingController _nameController;
+  late final TextEditingController _emailController;
+  late final TextEditingController _dobController;
 
   // Flags to toggle edit mode
   bool _isEditingName = false;
   bool _isEditingEmail = false;
   bool _isEditingDob = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize controllers with passed values or fallback to defaults
+    _nameController = TextEditingController(text: widget.name ?? '');
+    _emailController = TextEditingController(text: widget.email ?? '');
+    _dobController = TextEditingController(text: widget.dateOfBirth ?? '');
+  }
 
   @override
   void dispose() {
@@ -57,8 +72,8 @@ class _EditprofileState extends State<Editprofile> {
                       children: [
                         const CircleAvatar(
                           radius: 50,
-                          backgroundImage: AssetImage(
-                              'assets/images/profile.png'), // replace with your asset
+                          backgroundImage:
+                              AssetImage('assets/images/profile.png'),
                         ),
                         Container(
                           width: MediaQuery.of(context).size.width * 0.5,
@@ -81,23 +96,19 @@ class _EditprofileState extends State<Editprofile> {
                         )
                       ],
                     ),
-
                     const SizedBox(height: 70),
-
                     // Personal Info Box
                     Container(
                       width: size.width,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        color:
-                            const Color(0xffEBF6FF), // or any color you prefer
+                        color: const Color(0xffEBF6FF),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.grey.withOpacity(0.2),
                             spreadRadius: 2,
                             blurRadius: 5,
-                            offset: const Offset(
-                                0, 2), // changes position of shadow
+                            offset: const Offset(0, 2),
                           ),
                         ],
                       ),
@@ -136,7 +147,9 @@ class _EditprofileState extends State<Editprofile> {
                                           style: const TextStyle(fontSize: 15),
                                         )
                                       : Text(
-                                          _nameController.text,
+                                          _nameController.text.isEmpty
+                                              ? 'Not provided'
+                                              : _nameController.text,
                                           style: const TextStyle(fontSize: 15),
                                         ),
                                 ),
@@ -180,7 +193,9 @@ class _EditprofileState extends State<Editprofile> {
                                               TextInputType.emailAddress,
                                         )
                                       : Text(
-                                          _emailController.text,
+                                          _nameController.text.isEmpty
+                                              ? 'Not provided'
+                                              : _emailController.text,
                                           style: const TextStyle(fontSize: 15),
                                         ),
                                 ),
@@ -222,7 +237,9 @@ class _EditprofileState extends State<Editprofile> {
                                           style: const TextStyle(fontSize: 15),
                                         )
                                       : Text(
-                                          _dobController.text,
+                                          _nameController.text.isEmpty
+                                              ? 'Not provided'
+                                              : _dobController.text,
                                           style: const TextStyle(fontSize: 15),
                                         ),
                                 ),
@@ -257,6 +274,7 @@ class _EditprofileState extends State<Editprofile> {
                             _isEditingEmail = false;
                             _isEditingDob = false;
                           });
+                          // Optionally, add logic to save changes to backend or storage
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFEBF6FF),
@@ -273,8 +291,6 @@ class _EditprofileState extends State<Editprofile> {
                       ),
                     ),
                     SizedBox(height: size.height * 0.25),
-
-                    // Subscription Box
                   ],
                 ),
               ),

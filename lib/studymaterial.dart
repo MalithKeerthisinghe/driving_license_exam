@@ -26,7 +26,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
       'icon': Icons.visibility,
       'borderColor': Colors.orange,
     },
-    'attitud': {
+    'attitude': {
       'icon': Icons.emoji_emotions,
       'borderColor': Colors.indigo,
     },

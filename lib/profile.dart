@@ -293,7 +293,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: ElevatedButton(
                         onPressed: () {
                           Navigator.push(
-                              context, createFadeRoute(const Editprofile()));
+                            context,
+                            createFadeRoute(Editprofile(
+                              name: name,
+                              email: email,
+                              dateOfBirth: formatBirthdaySimple(
+                                  date), // Pass formatted date
+                            )),
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFEBF6FF),
