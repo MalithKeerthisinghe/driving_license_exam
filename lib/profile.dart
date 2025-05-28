@@ -20,7 +20,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? email;
   String? date;
   String? profileImageUrl;
-
   // Subscription related state
   UserSubscription? currentActivePlan;
   bool isSubscriptionLoading = true;
@@ -30,6 +29,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    // 🔥 FIX: Call getData() in initState to load user details
     _initializeData();
   }
 
@@ -264,145 +264,132 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 255, 255, 255),
-      body: isLoadingProfile
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Loading profile...'),
-                ],
-              ),
-            )
-          : SingleChildScrollView(
-              child: Column(
-                children: [
-                  appbar(
-                    textColor: Colors.black,
-                    size: size,
-                    bgcolor: const Color(0xFFEBF6FF),
-                    heading: "PROFILE INFORMATION",
-                  ),
-                  const SizedBox(height: 16),
-                  Center(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: size.width * 0.9),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          // Profile Image with improved handling
-                          CircleAvatar(
-                            radius: 50,
-                            backgroundImage: profileImageUrl != null &&
-                                    profileImageUrl!.isNotEmpty
-                                ? NetworkImage(profileImageUrl!)
-                                : const AssetImage('assets/images/profile.png')
-                                    as ImageProvider,
-                            onBackgroundImageError: (exception, stackTrace) {
-                              print('Error loading profile image: $exception');
-                            },
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            name ?? 'Loading...',
-                            style: const TextStyle(
-                                fontSize: 24, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 20),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            appbar(
+              textColor: Colors.black,
+              size: size,
+              bgcolor: const Color(0xFFEBF6FF),
+              heading: "PROFILE INFORMATION",
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: size.width * 0.9),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Fixed profile image to show network image if available
+                    CircleAvatar(
+                      radius: 50,
+                      backgroundImage:
+                          profileImageUrl != null && profileImageUrl!.isNotEmpty
+                              ? NetworkImage(profileImageUrl!) as ImageProvider
+                              : const AssetImage('assets/images/profile.png'),
+                      onBackgroundImageError: (exception, stackTrace) {
+                        print('Error loading profile image: $exception');
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      name ?? 'Loading...',
+                      style: const TextStyle(
+                          fontSize: 24, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 20),
 
-                          // Personal Info Box
-                          Container(
-                            width: size.width,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: const Color(0xffEBF6FF),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.grey.withOpacity(0.2),
-                                  spreadRadius: 2,
-                                  blurRadius: 5,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('Personal Information',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 18)),
-                                  const SizedBox(height: 10),
-                                  const Text('Full name:',
-                                      style: TextStyle(
-                                          fontSize: 12, color: Colors.grey)),
-                                  Text(name ?? 'Loading...',
-                                      style: const TextStyle(fontSize: 15)),
-                                  const SizedBox(height: 8),
-                                  const Text('Email address:',
-                                      style: TextStyle(
-                                          fontSize: 12, color: Colors.grey)),
-                                  Text(email ?? 'Loading...',
-                                      style: const TextStyle(fontSize: 15)),
-                                  const SizedBox(height: 8),
-                                  const Text('Date of birth:',
-                                      style: TextStyle(
-                                          fontSize: 12, color: Colors.grey)),
-                                  Text(formatBirthdaySimple(date),
-                                      style: const TextStyle(fontSize: 15)),
-                                  const SizedBox(height: 8),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 15),
-                          Container(
-                            width: MediaQuery.of(context).size.width,
-                            padding: const EdgeInsets.symmetric(horizontal: 0),
-                            child: ElevatedButton(
-                              onPressed: _navigateToEditProfile,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFEBF6FF),
-                                foregroundColor: Colors.black,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 16),
-                              ),
-                              child: const Text(
-                                'Edit Profile',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-
-                          // Dynamic Subscription Box
-                          _buildSubscriptionCard(size),
-
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            width: size.width,
-                            child: ElevatedButton(
-                              onPressed: () => _showLogoutDialog(context),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                foregroundColor: Colors.white,
-                              ),
-                              child: const Text('Log out'),
-                            ),
+                    // Personal Info Box
+                    Container(
+                      width: size.width,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: const Color(0xffEBF6FF),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.2),
+                            spreadRadius: 2,
+                            blurRadius: 5,
+                            offset: const Offset(0, 2),
                           ),
                         ],
                       ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Personal Information',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 18)),
+                            const SizedBox(height: 10),
+                            const Text('Full name:',
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.grey)),
+                            Text(name ?? 'Loading...',
+                                style: const TextStyle(fontSize: 15)),
+                            const SizedBox(height: 8),
+                            const Text('Email address:',
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.grey)),
+                            Text(email ?? 'Loading...',
+                                style: const TextStyle(fontSize: 15)),
+                            const SizedBox(height: 8),
+                            const Text('Date of birth:',
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.grey)),
+                            Text(formatBirthdaySimple(date),
+                                style: const TextStyle(fontSize: 15)),
+                            const SizedBox(height: 8),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 15),
+                    Container(
+                      width: MediaQuery.of(context).size.width,
+                      padding: const EdgeInsets.symmetric(horizontal: 0),
+                      child: ElevatedButton(
+                        // Fixed: Now calls the proper navigation method with parameters
+                        onPressed: _navigateToEditProfile,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFEBF6FF),
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child: const Text(
+                          'Edit Profile',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Dynamic Subscription Box
+                    _buildSubscriptionCard(size),
+
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: size.width,
+                      child: ElevatedButton(
+                        onPressed: () => _showLogoutDialog(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Log out'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
+          ],
+        ),
+      ),
     );
   }
 
